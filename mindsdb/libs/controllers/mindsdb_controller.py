@@ -8,7 +8,7 @@ import _thread
 import uuid
 import traceback
 import urllib
-
+import pandas as pd
 from mindsdb.libs.helpers.sqlite_helpers import *
 from mindsdb.libs.helpers.multi_data_source import getDS
 from mindsdb.config import SQLITE_FILE
@@ -24,20 +24,21 @@ from pathlib import Path
 
 class MindsDBController:
 
-    def __init__(self, file=SQLITE_FILE):
+    def __init__(self, file=SQLITE_FILE, check_for_updates = True):
         """
 
         :param file:
         """
 
         self.setConfigs()
-
-        _thread.start_new_thread(MindsDBController.checkForUpdates, ())
+        if check_for_updates:
+            _thread.start_new_thread(MindsDBController.checkForUpdates, ())
         self.session = SessionController()
         self.storage_file = file
         self.conn = sqlite3.connect(file)
         self.conn.create_aggregate("first_value", 1, FirstValueAgg)
         self.conn.create_aggregate("array_agg_json", 2, ArrayAggJSON)
+        self._from_data = None
 
     def setConfigs(self):
         """
@@ -140,8 +141,10 @@ class MindsDBController:
         :param test_query:
         :return:
         """
-
-        from_ds = getDS(from_data) if from_file is None else getDS(from_file)
+        if self._from_data is None :
+            from_ds = getDS(from_data) if from_file is None else getDS(from_file)
+        else:
+            from_ds = getDS(self._from_data)
         test_from_ds = test_from_data if test_from_data is None else getDS(test_from_data)
 
         transaction_type = TRANSACTION_LEARN
@@ -177,7 +180,7 @@ class MindsDBController:
     def startInfoServer(self):
         pass
 
-    def predict(self, when={}, from_data = None, model_name='mdsb_model', breakpoint= PHASE_END, **kargs):
+    def predict(self, when={}, from_data = None, model_name='mdsb_model', breakpoint= PHASE_END, predict=None):
         """
 
         :param predict:
@@ -185,7 +188,7 @@ class MindsDBController:
         :param model_name:
         :return:
         """
-        
+
 
 
         transaction_type = TRANSACTION_PREDICT
@@ -254,4 +257,8 @@ class MindsDBController:
 
             logging.warning('could not check for MindsDB updates')
 
-
+        # zhihua
+    def read_csv(self, filepath, delimiter=',', header='infer', encoding=None):
+        data_df = pd.read_csv(filepath, delimiter=delimiter, encoding=encoding, header=header)
+        self._from_data = data_df
+        return self
